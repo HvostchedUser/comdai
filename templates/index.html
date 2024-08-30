@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Markdown Editor with LaTeX Support</title>
+    <!-- MathJax for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/prism-coldark-cold.css') }}">
+
+    <!-- Prism.js JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.27.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.27.0/components/prism-python.min.js"></script> <!-- Include specific language -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+        <style>
+:root {
+    /* Global color palette */
+    --color-background: #f5f5f5;
+    --color-primary: #ff7043;  /* Primary elements */
+    --color-secondary: #ffe0b2;  /* Secondary elements */
+    --color-accent: #1e88e5;  /* Accent for links */
+    --color-muted: #5d4037;  /* Text and less prominent elements */
+    --color-header-bg: #f5f5f5;  /* Header backgrounds */
+    --color-header-text: #333;  /* Header text */
+    --color-code-bg: #e0f7fa;
+    --color-code-text: #00796b;
+    --color-table-bg: #fff3e0;
+    --color-table-header-bg: #ffe0b2;
+    --color-table-row-hover: #ffd180;
+    --color-inline-math-bg: #ffebee;
+
+    /* Global border radius */
+    --border-radius: 30px;
+
+    /* Global transition timing */
+    --transition-timing: 0.1s;
+}
+
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    background-color: var(--color-background);
+    color: var(--color-muted);
+}
+
+#editor-container, #preview-container {
+    width: 50%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+#editor-container {
+    border-right: 2px solid #ccc;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#editor {
+    width: 100%;
+    height: 100%;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 18px;
+    border: none;
+    outline: none;
+    resize: none;
+    background-color: #fff8e1;
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px; /* Adjust grid size */
+
+    color: var(--color-muted);
+    padding: 20px;
+    box-sizing: border-box;
+    transition: background-color var(--transition-timing), color var(--transition-timing);
+}
+
+#editor:focus {
+    background-color: #fff3e0;
+}
+
+#preview-container {
+    overflow-y: auto;
+    background-color: #ffffff;
+    border-left: 2px solid #ccc;
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    padding: 30px 30px 30px 80px;
+    box-sizing: border-box;
+    transition: background-color var(--transition-timing);
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px; /* Adjust grid size */
+}
+#preview {
+    font-size: 20px;
+    line-height: 1.6;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    color: var(--color-muted);
+    box-sizing: border-box;
+    border-radius: 0px;
+}
+
+/* Styling for markdown elements */
+h1, h2, h3, h4, h5, h6 {
+    margin-top: 1.2em;
+    margin-bottom: -0.5em;
+    margin-left: -40px;
+    color: var(--color-header-text);
+    border-bottom: 2px solid #ccc;  /* Add a line under the header */
+}
+
+blockquote {
+    margin: 1.2em 0;
+    padding: var(--border-radius);
+    background-color: var(--color-secondary);
+    border-left: 8px solid var(--color-primary);
+    color: var(--color-muted);
+    font-style: italic;
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-timing);
+}
+
+code {
+    background-color: var(--color-code-bg);
+    color: var(--color-code-text);
+    border-radius: var(--border-radius);
+    padding: 5px 10px;
+    font-size: 16px;
+}
+
+pre {
+    background-color: var(--color-code-bg);
+    color: var(--color-code-text);
+    padding: 0px var(--border-radius) var(--border-radius) var(--border-radius);
+    border-radius: var(--border-radius);
+    overflow-x: auto;
+}
+
+pre code {
+    padding: 0;
+    background-color: transparent;
+}
+a {
+    color: var(--color-accent);
+    text-decoration: none;
+    position: relative;
+    transition: color var(--transition-timing);
+}
+
+a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -0.125rem; /* 2px */
+    width: 100%;
+    height: 0.125rem; /* 2px */
+    background-color: var(--color-accent);
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform var(--transition-timing) 0.15s;
+}
+
+a:hover::after {
+    transform: scaleX(1);
+    transform-origin: right;
+}
+
+a:hover {
+    color: #0288d1;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius);
+    transition: border-radius var(--transition-timing);
+}
+
+img:hover {
+    border-radius: var(--border-radius);
+}
+
+/* Table styling with reduced colors and slow hover animation */
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 20px 0;
+    background-color: var(--color-table-bg);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    transition: background-color var(--transition-timing);
+}
+
+th, td {
+    padding: var(--border-radius);
+    border: none;
+    text-align: left;
+    background-color: var(--color-table-bg);
+}
+
+th {
+    background-color: var(--color-table-header-bg);
+    color: var(--color-header-text);
+    font-weight: bold;
+}
+
+td {
+    color: var(--color-muted);
+}
+
+tr:nth-child(even) td {
+    background-color: var(--color-table-header-bg);
+}
+
+tr:hover {
+    background-color: var(--color-table-row-hover);
+}
+
+/* Lists styling - neutral colors */
+ul, ol {
+    background-color: transparent;
+}
+
+ul li, ol li {
+    background-color: transparent;
+}
+
+.custom-block {
+    background-color: #e3f2fd; /* Light blue background */
+    border-right: 5px solid #1e88e5; /* Blue border */
+    margin-left: -60px;
+    padding: 10px 15px;
+    margin: 10px 0;
+    border-radius: 0px;
+    color: var(--color-muted); /* Use your muted text color */
+    font-style: italic; /* Optional: make the text italic */
+    box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.1); /* Optional: subtle shadow */
+    transition: background-color var(--transition-timing), border-color var(--transition-timing);
+}
+
+.throbber {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #1e88e5; /* Blue border */
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+    margin-right: 10px; /* Space between throbber and text */
+    vertical-align: middle; /* Align with text */
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+
+
+/* LaTeX Math Styling */
+.math {
+    background-color: var(--color-inline-math-bg);
+    padding: 5px 10px;
+    border-radius: var(--border-radius);
+    display: inline-block;
+}
+.lang-label {
+    display: block;
+    font-size: 12px;  /* Smaller font size */
+    color: #888;      /* Different color */
+    text-align: right;
+    margin-right: 10px;
+    position: relative;
+    top: calc(var(--border-radius)/3);
+    padding: 2px 5px;
+    border-radius: 0 0 5px 5px;
+}
+
+#control-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 40px; /* Slim width */
+    background-color: var(--color-primary);
+    border-left: 2px solid #ccc;
+    border-right: 2px solid #ccc;
+    box-sizing: border-box;
+    transition: width var(--transition-timing);
+}
+
+#control-panel button {
+    width: 100%;
+    padding: 10px 0;
+    border: none;
+    background-color: transparent;
+    color: #fff;
+    font-size: 18px;  /* Increase icon size */
+    cursor: pointer;
+    transition: background-color var(--transition-timing);
+    display: block;  /* Ensure all buttons are block level */
+}
+
+#control-panel button i {
+    pointer-events: none;  /* Prevent icon from capturing click events */
+}
+
+#control-panel button.hidden {
+    display: none;
+}
+
+/* Define the sliding and glowing animation */
+@keyframes slideUpAndGlow {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+        box-shadow: 0 0 15px 1-px rgba(255, 215, 0, 1); /* Bright glow at start */
+        background-color: rgba(255, 255, 0, 1); /* Subtle background color */
+    }
+    50% {
+        opacity: 1;
+        transform: translateY(0);
+        box-shadow: 0 0 10px 5px rgba(255, 215, 0, 0.5); /* Dimming glow */
+        background-color: rgba(255, 255, 0, 0.5); /* Subtle background color */
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+        box-shadow: 0 0 0px 0px rgba(255, 215, 0, 0); /* No glow at the end */
+        background-color: rgba(255, 255, 0, 0); /* Subtle background color */
+    }
+}
+
+/* Apply the sliding and glowing animation to highlighted elements */
+.highlighted {
+    display: inline-block;
+    margin-left: 6px;
+    animation: slideUpAndGlow 0.5s ease-out forwards; /* Play the animation */
+}
+
+
+
+.hidden {
+    transition: width 0.3s ease, opacity 0.3s ease, visibility 0.3s ease;
+}
+
+    </style>
+</head>
+<body>
+    <div id="control-panel">
+        <button id="show-editor"><i class="fas fa-eye"></i></button>
+        <button id="show-preview"><i class="fas fa-edit"></i></button>
+        <button id="restore-panels" class="hidden"><i class="fas fa-columns"></i></button>
+    </div>
+
+    <div id="editor-container">
+        <textarea id="editor" placeholder="Type your markdown here..."></textarea>
+    </div>
+    <div id="preview-container">
+        <div id="preview"></div>
+    </div>
+
+    <!-- Include Socket.IO JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <script>
+
+        document.getElementById('show-editor').addEventListener('click', function() {
+        const editorContainer = document.getElementById('editor-container');
+        const previewContainer = document.getElementById('preview-container');
+        const showPreviewButton = document.getElementById('show-preview');
+        const restorePanelsButton = document.getElementById('restore-panels');
+
+        if (editorContainer.style.display !== 'none') {
+            editorContainer.style.display = 'none';
+            previewContainer.style.width = '100%'; // Expand preview to full width
+            this.style.display = 'none';  // Hide this button
+            showPreviewButton.style.display = 'none';  // Hide the show-preview button
+            restorePanelsButton.style.display = 'block';  // Show the restore-panels button
+        }
+    });
+
+    document.getElementById('show-preview').addEventListener('click', function() {
+        const previewContainer = document.getElementById('preview-container');
+        const editorContainer = document.getElementById('editor-container');
+        const showEditorButton = document.getElementById('show-editor');
+        const restorePanelsButton = document.getElementById('restore-panels');
+
+        if (previewContainer.style.display !== 'none') {
+            previewContainer.style.display = 'none';
+            editorContainer.style.width = '100%'; // Expand editor to full width
+            this.style.display = 'none';  // Hide this button
+            showEditorButton.style.display = 'none';  // Hide the show-editor button
+            restorePanelsButton.style.display = 'block';  // Show the restore-panels button
+        }
+    });
+
+    document.getElementById('restore-panels').addEventListener('click', function() {
+        const editorContainer = document.getElementById('editor-container');
+        const previewContainer = document.getElementById('preview-container');
+        const showEditorButton = document.getElementById('show-editor');
+        const showPreviewButton = document.getElementById('show-preview');
+
+        editorContainer.style.display = 'block';
+        previewContainer.style.display = 'block';
+        editorContainer.style.width = '50%';
+        previewContainer.style.width = '50%';
+        this.style.display = 'none';  // Hide this button
+        showEditorButton.style.display = 'block';  // Show the show-editor button
+        showPreviewButton.style.display = 'block';  // Show the show-preview button
+    });
+
+
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+        const editor = document.getElementById('editor');
+        editor.value = ""
+        const preview = document.getElementById('preview');
+
+        const clientId = Math.random().toString(36).substr(2, 9); // Unique client ID
+        let lastContent = editor.value; // Initial content
+        let isLocalChange = false;
+
+        // Initialize diff-match-patch
+        const dmp = new diff_match_patch();
+
+        // Convert markdown to HTML and render LaTeX
+        function renderMarkdown(text) {
+            // Handle block LaTeX (MathJax)
+            text = text.replace(/^\$\$(.*?)\$\$/gms, '<div class="math">\\[$1\\]</div>');
+
+            // Handle inline LaTeX (MathJax)
+            text = text.replace(/\$(.*?)\$/g, '<span class="math">\\($1\\)</span>');
+
+            // Handle code blocks with language highlighting
+            try{
+                text = text.replace(/```(\w+)\n([\s\S]*?)```/g, function(match, lang, code) {
+                    return `<pre class="language-${lang}"><code class="language-${lang}">${Prism.highlight(code, Prism.languages[lang], lang)}</code><span class="lang-label">${lang}</span></pre>`;
+                });
+            } catch (error){
+                text = text.replace(/```(\w+)\n([\s\S]*?)```/g, function(match, lang, code) {
+                    return `<pre class="language-${lang}"><code class="language-${lang}">${code}</code><span class="lang-label">${lang}</span></pre>`;
+                });
+            }
+
+            // Handle custom block between => and <=|, replacing => with a throbber
+            // Handle lines with only =>, allowing spaces and newlines
+            text = text.replace(/^=>\s*$/gm, '<div class="custom-block"><span class="throbber"></span></div>');
+            text = text.replace(/=>\s*([\s\S]*?)\s*<=\|/g, '<div class="custom-block"><span class="throbber"></span> $1</div>');
+
+
+
+            // Handle headers
+            text = text
+                .replace(/^###### (.*$)/gim, '<h6>$1</h6>')
+                .replace(/^##### (.*$)/gim, '<h5>$1</h5>')
+                .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+            // Handle blockquotes
+            text = text.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+
+            // Handle bold and italics
+            text = text
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // bold with **
+                .replace(/\*(.*?)\*/g, '<i>$1</i>')     // italic with *
+                .replace(/__(.*?)__/g, '<b>$1</b>')     // bold with __
+                .replace(/_(.*?)_/g, '<i>$1</i>');      // italic with _
+
+            // Handle strikethrough with ~~
+            text = text.replace(/\~\~(.*?)\~\~/g, '<del>$1</del>');
+
+
+            // Handle horizontal rules (--- or any number of hyphens)
+            text = text.replace(/^\s*[-]{3,}\s*$/gim, '<hr>');
+
+            // Handle inline code
+            text = text.replace(/\`(.*?)\`/gim, '<code>$1</code>');
+
+            // Handle images (order matters here)
+            text = text.replace(/\!\[(.*?)\]\((.*?)\)/gim, '<img src="$2" alt="$1">');
+
+            // Handle links
+            text = text.replace(/\[(.*?)\]\((.*?)\)/gim, '<a href="$2" target="_blank">$1</a>');
+
+
+            function processLists(text) {
+                    const lines = text.split('\n');
+                    let result = '';
+                    let listStack = []; // Stack to keep track of opened lists
+                    let previousIndent = 0;
+
+                    lines.forEach(line => {
+                        const unorderedMatch = line.match(/^(\s*)([-*])\s+(.*)/);
+                        const orderedMatch = line.match(/^(\s*)(\d+\.)\s+(.*)/);
+
+                        if (unorderedMatch) {
+                            const indent = unorderedMatch[1].length+1;
+                            const content = unorderedMatch[3];
+
+                            if (indent > previousIndent) {
+                                result += `<ul>\n<li>${content}</li>\n`;
+                                listStack.push('ul');
+                            } else if (indent < previousIndent) {
+                                while (indent < previousIndent && listStack.length > 0) {
+                                    result += `</${listStack.pop()}>\n`;
+                                    previousIndent -= 4;
+                                }
+                                result += `<li>${content}</li>\n`;
+                            } else {
+                                result += `<li>${content}</li>\n`;
+                            }
+                            previousIndent = indent;
+
+                        } else if (orderedMatch) {
+                            const indent = orderedMatch[1].length+1;
+                            const content = orderedMatch[3];
+
+                            if (indent > previousIndent) {
+                                result += `<ol>\n<li>${content}</li>\n`;
+                                listStack.push('ol');
+                            } else if (indent < previousIndent) {
+                                while (indent < previousIndent && listStack.length > 0) {
+                                    result += `</${listStack.pop()}>\n`;
+                                    previousIndent -= 4;
+                                }
+                                result += `<li>${content}</li>\n`;
+                            } else {
+                                result += `<li>${content}</li>\n`;
+                            }
+                            previousIndent = indent;
+
+                        } else {
+                            // If it's not a list, close any open lists
+                            while (listStack.length > 0) {
+                                result += `</${listStack.pop()}>\n`;
+                            }
+                            result += `${line}\n`;
+                            previousIndent = 0;
+                        }
+                    });
+
+                    // Close any remaining open lists at the end
+                    while (listStack.length > 0) {
+                        result += `</${listStack.pop()}>\n`;
+                    }
+
+                    return result;
+                }
+
+                // Replace lists in the text
+                text = processLists(text);
+
+
+            // Handle tables
+            text = text.replace(/^\|(.+)\|\s*\n\|([-|: ]+)\|\s*\n((?:\|.*\|\s*\n)*)/gim, function (match, header, align, body) {
+                let headerCells = header.split('|').map(cell => `<th>${cell.trim()}</th>`).join('');
+                let bodyRows = body.split('\n').filter(row => row).map(row => {
+                    let cells = row.split('|').slice(1, -1).map(cell => `<td>${cell.trim()}</td>`).join('');
+                    return `<tr>${cells}</tr>`;
+                }).join('');
+                return `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+            });
+
+            // Handle line breaks
+            text = text.replace(/\n\n/g, '<br />');
+
+            preview.innerHTML = text;
+
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+        }
+
+
+
+        // Save and restore cursor position and selection range
+        function saveSelection() {
+            return {
+                start: editor.selectionStart,
+                end: editor.selectionEnd
+            };
+        }
+
+        function restoreSelection(selection) {
+            editor.selectionStart = selection.start;
+            editor.selectionEnd = selection.end;
+            editor.focus();
+        }
+
+        // Adjust selection based on diffs
+        function adjustSelection(selection, patch) {
+            let newStart = selection.start;
+            let newEnd = selection.end;
+
+            patch.forEach(p => {
+                const diffStart = p.start1;
+
+                p.diffs.forEach(diff => {
+                    const diffText = diff[1].length;
+
+                    if (diff[0] === -1) { // Deletion
+                        if (selection.start > diffStart) {
+                            newStart -= Math.min(diffText, selection.start - diffStart);
+                        }
+                        if (selection.end > diffStart) {
+                            newEnd -= Math.min(diffText, selection.end - diffStart);
+                        }
+                    } else if (diff[0] === 1) { // Insertion
+                        if (selection.start >= diffStart) {
+                            newStart += diffText;
+                        }
+                        if (selection.end >= diffStart) {
+                            newEnd += diffText;
+                        }
+                    }
+                });
+            });
+
+            return { start: newStart, end: newEnd };
+        }
+
+// Function to wrap new content with a span that will be animated
+function highlightChanges(newText, oldText) {
+    const diffOutput = dmp.diff_main(oldText, newText);
+    dmp.diff_cleanupSemantic(diffOutput);
+
+    let highlightedText = '';
+    diffOutput.forEach(part => {
+        const [op, text] = part;
+        if (op === 0) { // Unchanged text
+            highlightedText += text;
+        } else if (op === 1) { // Added text
+            const spanId = `highlight-${Math.random().toString(36).substr(2, 9)}`;
+            highlightedText += `<span id="${spanId}" class="highlighted">${text}</span>`;
+            removeHighlightAfterDelay(spanId);
+        } else if (op === -1) { // Removed text (we don't render this in preview)
+            // Optionally, you could keep track of removed text if needed.
+        }
+    });
+
+    return highlightedText;
+}
+
+// Function to remove the highlight class after a delay
+function removeHighlightAfterDelay(elementId) {
+    setTimeout(() => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.classList.remove('highlighted');
+        }
+    }, 5000); // Delay in milliseconds
+}
+
+// Modified applyPatch function
+function applyPatch(patch) {
+    const selection = saveSelection();
+    const [newText, results] = dmp.patch_apply(patch, editor.value);
+    const adjustedSelection = adjustSelection(selection, patch);
+
+    isLocalChange = true;
+    editor.value = newText;
+
+    // Highlight changes in the preview
+    const highlightedMarkdown = highlightChanges(newText, lastContent);
+    renderMarkdown(highlightedMarkdown);
+
+    lastContent = newText;
+    restoreSelection(adjustedSelection);
+}
+
+
+        // Handle patch updates from the server
+        socket.on('patch_update', function ({ patchText, senderId }) {
+            if (senderId !== clientId) {
+                const patch = dmp.patch_fromText(patchText);
+                applyPatch(patch);
+            }
+        });
+
+        // Function to check for the special line format and send it to the backend for processing
+        function checkSpecialFormat(text) {
+            // Regular expression to match lines in the format `=<line>=`
+            const specialLineRegex = /^=\\(.*?)\\=$/gm;
+            let matches = [];
+            let match;
+
+            while ((match = specialLineRegex.exec(text)) !== null) {
+                matches.push(match[1]); // Store the content without the equals signs
+            }
+
+            // If we found matches, send them to the backend for processing
+            if (matches.length > 0) {
+                socket.emit('process_special_format', { matches, clientId });
+            }
+        }
+
+        // Detect changes in the editor and send a patch to the server
+        editor.addEventListener("input", function() {
+            if (!isLocalChange) {
+                const currentValue = editor.value;
+                const diffs = dmp.diff_main(lastContent, currentValue);
+                if (diffs.length > 0) {
+                    dmp.diff_cleanupSemantic(diffs);
+                    const patches = dmp.patch_make(lastContent, diffs);
+                    const patchText = dmp.patch_toText(patches);
+
+                    // Check and process any special format before sending
+                    checkSpecialFormat(currentValue);
+
+                    socket.emit('markdown_patch', { patchText, clientId });
+                    lastContent = currentValue;
+                    renderMarkdown(currentValue);
+                }
+            } else {
+                isLocalChange = false;
+
+                //renderMarkdown(currentValue);
+            }
+        });
+
+        // Initial render
+        renderMarkdown(editor.value);
+    </script>
+</body>
+</html>

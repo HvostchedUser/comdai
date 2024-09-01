@@ -1,4 +1,7 @@
 # Comdai: Collaborative Markdown AI-powered Editor
+
+![изображение](https://github.com/user-attachments/assets/9147b521-61f6-4f1a-97c9-9a5d05c29834)
+
 Your Minimalist Markdown Editor with AI Power 
 
 **Comdai is a free and open-source markdown editor that blends simplicity, power, and cutting-edge AI features.**  Ideal for collaborative writing, brainstorming, and even casual note-taking. 

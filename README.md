@@ -19,15 +19,6 @@ Your Minimalist Markdown Editor with AI Power
 2. **Collaborative Editing:** Work together seamlessly on the same document, making Comdai perfect for team projects or brainstorming sessions.  
 3. **Markdown Syntax Support:**  Comdai provides a familiar Markdown experience with easy-to-use syntax for headings, lists, and more.
 
-**Getting Started:**
-
-* Visit our website: [Link to Website] 
-* Download the latest version from GitHub: [Link to Github Repository]
-* Explore the comprehensive documentation: [Link to Documentation]
-
-
-**Join the Comdai Community:**  We're passionate about creating a collaborative, AI-powered writing environment. Connect with us on [Social Media Links].
-
 
 
 Let Comdai empower your creativity and productivity! 

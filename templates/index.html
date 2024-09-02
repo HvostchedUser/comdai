@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Markdown Editor with LaTeX Support</title>
+    <title>Comdai</title>
     <!-- MathJax for LaTeX rendering -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -286,18 +286,46 @@ ul li, ol li {
     padding: 2px 5px;
     border-radius: 0 0 5px 5px;
 }
-
 #control-panel {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    width: 40px; /* Slim width */
+    justify-content: flex-start;
+    width: 40px;
     background-color: var(--color-primary);
     border-left: 2px solid #ccc;
     border-right: 2px solid #ccc;
     box-sizing: border-box;
-    transition: width var(--transition-timing);
+    position: relative;
+    padding-top: 20px;
+    height: 100vh; /* Full height panel */
+}
+
+#vertical-text {
+    transform: rotate(-90deg);
+    padding: 10px 20px 10px 0px;
+    font-size: 14px;
+    color: white;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+#top-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 60px; /* Space between text and buttons */
+}
+
+#middle-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: auto;
+    margin-bottom: auto;
+    justify-content: center; /* Center the buttons within the panel */
+    height: 100%; /* Use entire panel height for centering */
 }
 
 #control-panel button {
@@ -306,14 +334,17 @@ ul li, ol li {
     border: none;
     background-color: transparent;
     color: #fff;
-    font-size: 18px;  /* Increase icon size */
+    font-size: 18px;  /* Icon size */
     cursor: pointer;
-    transition: background-color var(--transition-timing);
-    display: block;  /* Ensure all buttons are block level */
+    transition: transform 0.3s ease, background-color 0.3s ease;
 }
 
 #control-panel button i {
-    pointer-events: none;  /* Prevent icon from capturing click events */
+    pointer-events: none; /* Prevent icon from capturing click events */
+}
+
+#control-panel button:hover {
+    transform: scale(1.3); /* Slightly enlarge the button on hover */
 }
 
 #control-panel button.hidden {
@@ -359,10 +390,19 @@ ul li, ol li {
 </head>
 <body>
     <div id="control-panel">
-        <button id="show-editor"><i class="fas fa-eye"></i></button>
-        <button id="show-preview"><i class="fas fa-edit"></i></button>
-        <button id="restore-panels" class="hidden"><i class="fas fa-columns"></i></button>
+        <div id="vertical-text">Comdai</div>
+        <div id="top-buttons">
+            <button id="download-md" title="Download Markdown"><i class="fas fa-download"></i></button>
+            <input type="file" id="upload-md" style="display: none;" accept=".md">
+            <button id="upload-md-btn" title="Upload Markdown"><i class="fas fa-upload"></i></button>
+        </div>
+        <div id="middle-buttons">
+            <button id="show-editor"><i class="fas fa-eye"></i></button>
+            <button id="show-preview"><i class="fas fa-edit"></i></button>
+            <button id="restore-panels" class="hidden"><i class="fas fa-columns"></i></button>
+        </div>
     </div>
+
 
     <div id="editor-container">
         <textarea id="editor" placeholder="Type your markdown here..."></textarea>
@@ -374,6 +414,37 @@ ul li, ol li {
     <!-- Include Socket.IO JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
     <script>
+// Download the content of the editor as a .md file
+document.getElementById('download-md').addEventListener('click', function() {
+    const content = editor.value;
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'document.md';
+    link.click();
+    URL.revokeObjectURL(url);
+});
+
+// Trigger the hidden file input when the upload button is clicked
+document.getElementById('upload-md-btn').addEventListener('click', function() {
+    document.getElementById('upload-md').click();
+});
+
+// Handle the uploaded file
+document.getElementById('upload-md').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (file && file.name.endsWith('.md')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            editor.value = e.target.result;
+            renderMarkdown(editor.value);
+        };
+        reader.readAsText(file);
+    } else {
+        alert('Please upload a valid Markdown (.md) file.');
+    }
+});
 
         document.getElementById('show-editor').addEventListener('click', function() {
         const editorContainer = document.getElementById('editor-container');
@@ -434,155 +505,171 @@ ul li, ol li {
         const dmp = new diff_match_patch();
 
         // Convert markdown to HTML and render LaTeX
-        function renderMarkdown(text) {
-            // Handle block LaTeX (MathJax)
-            text = text.replace(/^\$\$(.*?)\$\$/gms, '<div class="math">\\[$1\\]</div>');
+function renderMarkdown(text) {
+    const placeholders = [];
 
-            // Handle inline LaTeX (MathJax)
-            text = text.replace(/\$(.*?)\$/g, '<span class="math">\\($1\\)</span>');
+    // Helper function to store and replace code/math content with a placeholder
+    function storePlaceholder(content) {
+        const placeholder = `<nomd>block-${placeholders.length}<nomd>`;
+        placeholders.push(content);
+        return placeholder;
+    }
 
-            // Handle code blocks with language highlighting
-            try{
-                text = text.replace(/```(\w+)\n([\s\S]*?)```/g, function(match, lang, code) {
-                    return `<pre class="language-${lang}"><code class="language-${lang}">${Prism.highlight(code, Prism.languages[lang], lang)}</code><span class="lang-label">${lang}</span></pre>`;
-                });
-            } catch (error){
-                text = text.replace(/```(\w+)\n([\s\S]*?)```/g, function(match, lang, code) {
-                    return `<pre class="language-${lang}"><code class="language-${lang}">${code}</code><span class="lang-label">${lang}</span></pre>`;
-                });
-            }
+    // Handle block LaTeX (MathJax)
+    text = text.replace(/^\$\$(.*?)\$\$/gms, (_, math) => storePlaceholder(`<div class="math">\\[${math}\\]</div>`));
 
-            // Handle custom block between => and <=|, replacing => with a throbber
-            // Handle lines with only =>, allowing spaces and newlines
-            text = text.replace(/^=>\s*$/gm, '<div class="custom-block"><span class="throbber"></span></div>');
-            text = text.replace(/=>\s*([\s\S]*?)\s*<=\|/g, '<div class="custom-block"><span class="throbber"></span> $1</div>');
+    // Handle inline LaTeX (MathJax)
+    text = text.replace(/\$(.*?)\$/g, (_, math) => storePlaceholder(`<span class="math">\\(${math}\\)</span>`));
 
+    // Handle code blocks with or without language highlighting
+    try {
+        text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+            const highlightedCode = lang
+                ? `<pre class="language-${lang}"><code class="language-${lang}">${Prism.highlight(code, Prism.languages[lang] || Prism.languages.plain, lang)}</code><span class="lang-label">${lang}</span></pre>`
+                : `<pre><code>${Prism.highlight(code, Prism.languages.plain, 'plain')}</code></pre>`;
+            return storePlaceholder(highlightedCode);
+        });
+    } catch (error) {
+        text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+            const highlightedCode = lang
+                ? `<pre class="language-${lang}"><code class="language-${lang}">${Prism.highlight(code, Prism.languages[lang] || Prism.languages.plain, lang)}</code><span class="lang-label">${lang}</span></pre>`
+                : `<pre><code>${Prism.highlight(code, Prism.languages.plain, 'plain')}</code></pre>`;
+            return storePlaceholder(highlightedCode);
+        });
+    }
 
+    // Now, process the rest of the markdown
+    // Handle custom block between => and <=|, replacing => with a throbber
+    text = text.replace(/^=>\s*$/gm, '<div class="custom-block"><span class="throbber"></span></div>');
+    text = text.replace(/=>\s*([\s\S]*?)\s*<=\|/g, '<div class="custom-block"><span class="throbber"></span> $1</div>');
 
-            // Handle headers
-            text = text
-                .replace(/^###### (.*$)/gim, '<h6>$1</h6>')
-                .replace(/^##### (.*$)/gim, '<h5>$1</h5>')
-                .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
-                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-                .replace(/^# (.*$)/gim, '<h1>$1</h1>');
+    // Handle headers
+    text = text
+        .replace(/^###### (.*$)/gim, '<h6>$1</h6>')
+        .replace(/^##### (.*$)/gim, '<h5>$1</h5>')
+        .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>');
 
-            // Handle blockquotes
-            text = text.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+    // Handle blockquotes
+    text = text.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
 
-            // Handle bold and italics
-            text = text
-                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // bold with **
-                .replace(/\*(.*?)\*/g, '<i>$1</i>')     // italic with *
-                .replace(/__(.*?)__/g, '<b>$1</b>')     // bold with __
-                .replace(/_(.*?)_/g, '<i>$1</i>');      // italic with _
+    // Handle bold and italics
+    text = text
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // bold with **
+        .replace(/\*(.*?)\*/g, '<i>$1</i>')     // italic with *
+        .replace(/__(.*?)__/g, '<b>$1</b>')     // bold with __
+        .replace(/_(.*?)_/g, '<i>$1</i>');      // italic with _
 
-            // Handle strikethrough with ~~
-            text = text.replace(/\~\~(.*?)\~\~/g, '<del>$1</del>');
+    // Handle strikethrough with ~~
+    text = text.replace(/\~\~(.*?)\~\~/g, '<del>$1</del>');
 
+    // Handle horizontal rules (--- or any number of hyphens)
+    text = text.replace(/^\s*[-]{3,}\s*$/gim, '<hr>');
 
-            // Handle horizontal rules (--- or any number of hyphens)
-            text = text.replace(/^\s*[-]{3,}\s*$/gim, '<hr>');
+    // Handle inline code
+    text = text.replace(/\`(.*?)\`/gim, '<code>$1</code>');
 
-            // Handle inline code
-            text = text.replace(/\`(.*?)\`/gim, '<code>$1</code>');
+    // Handle images (order matters here)
+    text = text.replace(/\!\[(.*?)\]\((.*?)\)/gim, '<img src="$2" alt="$1">');
 
-            // Handle images (order matters here)
-            text = text.replace(/\!\[(.*?)\]\((.*?)\)/gim, '<img src="$2" alt="$1">');
+    // Handle links
+    text = text.replace(/\[(.*?)\]\((.*?)\)/gim, '<a href="$2" target="_blank">$1</a>');
 
-            // Handle links
-            text = text.replace(/\[(.*?)\]\((.*?)\)/gim, '<a href="$2" target="_blank">$1</a>');
+    function processLists(text) {
+        const lines = text.split('\n');
+        let result = '';
+        let listStack = []; // Stack to keep track of opened lists
+        let previousIndent = 0;
 
+        lines.forEach(line => {
+            const unorderedMatch = line.match(/^(\s*)([-*])\s+(.*)/);
+            const orderedMatch = line.match(/^(\s*)(\d+\.)\s+(.*)/);
 
-            function processLists(text) {
-                    const lines = text.split('\n');
-                    let result = '';
-                    let listStack = []; // Stack to keep track of opened lists
-                    let previousIndent = 0;
+            if (unorderedMatch) {
+                const indent = unorderedMatch[1].length + 1;
+                const content = unorderedMatch[3];
 
-                    lines.forEach(line => {
-                        const unorderedMatch = line.match(/^(\s*)([-*])\s+(.*)/);
-                        const orderedMatch = line.match(/^(\s*)(\d+\.)\s+(.*)/);
-
-                        if (unorderedMatch) {
-                            const indent = unorderedMatch[1].length+1;
-                            const content = unorderedMatch[3];
-
-                            if (indent > previousIndent) {
-                                result += `<ul>\n<li>${content}</li>\n`;
-                                listStack.push('ul');
-                            } else if (indent < previousIndent) {
-                                while (indent < previousIndent && listStack.length > 0) {
-                                    result += `</${listStack.pop()}>\n`;
-                                    previousIndent -= 4;
-                                }
-                                result += `<li>${content}</li>\n`;
-                            } else {
-                                result += `<li>${content}</li>\n`;
-                            }
-                            previousIndent = indent;
-
-                        } else if (orderedMatch) {
-                            const indent = orderedMatch[1].length+1;
-                            const content = orderedMatch[3];
-
-                            if (indent > previousIndent) {
-                                result += `<ol>\n<li>${content}</li>\n`;
-                                listStack.push('ol');
-                            } else if (indent < previousIndent) {
-                                while (indent < previousIndent && listStack.length > 0) {
-                                    result += `</${listStack.pop()}>\n`;
-                                    previousIndent -= 4;
-                                }
-                                result += `<li>${content}</li>\n`;
-                            } else {
-                                result += `<li>${content}</li>\n`;
-                            }
-                            previousIndent = indent;
-
-                        } else {
-                            // If it's not a list, close any open lists
-                            while (listStack.length > 0) {
-                                result += `</${listStack.pop()}>\n`;
-                            }
-                            result += `${line}\n`;
-                            previousIndent = 0;
-                        }
-                    });
-
-                    // Close any remaining open lists at the end
-                    while (listStack.length > 0) {
+                if (indent > previousIndent) {
+                    result += `<ul>\n<li>${content}</li>\n`;
+                    listStack.push('ul');
+                } else if (indent < previousIndent) {
+                    while (indent < previousIndent && listStack.length > 0) {
                         result += `</${listStack.pop()}>\n`;
+                        previousIndent -= 4;
                     }
-
-                    return result;
+                    result += `<li>${content}</li>\n`;
+                } else {
+                    result += `<li>${content}</li>\n`;
                 }
+                previousIndent = indent;
 
-                // Replace lists in the text
-                text = processLists(text);
+            } else if (orderedMatch) {
+                const indent = orderedMatch[1].length + 1;
+                const content = orderedMatch[3];
 
+                if (indent > previousIndent) {
+                    result += `<ol>\n<li>${content}</li>\n`;
+                    listStack.push('ol');
+                } else if (indent < previousIndent) {
+                    while (indent < previousIndent && listStack.length > 0) {
+                        result += `</${listStack.pop()}>\n`;
+                        previousIndent -= 4;
+                    }
+                    result += `<li>${content}</li>\n`;
+                } else {
+                    result += `<li>${content}</li>\n`;
+                }
+                previousIndent = indent;
 
-            // Handle tables
-            text = text.replace(/^\|(.+)\|\s*\n\|([-|: ]+)\|\s*\n((?:\|.*\|\s*\n)*)/gim, function (match, header, align, body) {
-                let headerCells = header.split('|').map(cell => `<th>${cell.trim()}</th>`).join('');
-                let bodyRows = body.split('\n').filter(row => row).map(row => {
-                    let cells = row.split('|').slice(1, -1).map(cell => `<td>${cell.trim()}</td>`).join('');
-                    return `<tr>${cells}</tr>`;
-                }).join('');
-                return `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-            });
-
-            // Handle line breaks
-            text = text.replace(/\n\n/g, '<br />');
-
-            preview.innerHTML = text;
-
-            if (window.MathJax) {
-                MathJax.typesetPromise();
+            } else {
+                // If it's not a list, close any open lists
+                while (listStack.length > 0) {
+                    result += `</${listStack.pop()}>\n`;
+                }
+                result += `${line}\n`;
+                previousIndent = 0;
             }
+        });
+
+        // Close any remaining open lists at the end
+        while (listStack.length > 0) {
+            result += `</${listStack.pop()}>\n`;
         }
 
+        return result;
+    }
+
+    // Replace lists in the text
+    text = processLists(text);
+
+    // Handle tables
+    text = text.replace(/^\|(.+)\|\s*\n\|([-|: ]+)\|\s*\n((?:\|.*\|\s*\n)*)/gim, function (match, header, align, body) {
+        let headerCells = header.split('|').map(cell => `<th>${cell.trim()}</th>`).join('');
+        let bodyRows = body.split('\n').filter(row => row).map(row => {
+            let cells = row.split('|').slice(1, -1).map(cell => `<td>${cell.trim()}</td>`).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+        return `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    });
+
+    // Handle line breaks
+    text = text.replace(/\n\n/g, '<br />');
+
+    // Restore placeholders
+    placeholders.forEach((content, index) => {
+        text = text.replace(`<nomd>block-${index}<nomd>`, content);
+    });
+
+    // Set the preview content
+    preview.innerHTML = text;
+
+    // Trigger MathJax rendering if available
+    if (window.MathJax) {
+        MathJax.typesetPromise();
+    }
+}
 
 
         // Save and restore cursor position and selection range

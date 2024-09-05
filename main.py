@@ -10,7 +10,7 @@ socketio = SocketIO(app, async_mode='threading')
 
 # Initialize the language model
 llm = Llama(
-    model_path="gemma-2-2b-it-Q5_K_M.gguf",
+    model_path="gemma-2-2b-it-IQ4_XS.gguf",
     verbose=False,
     n_threads=8,
     n_ctx=8128,  # Set the max context to 256 tokens
@@ -33,6 +33,7 @@ def truncate_context(context, prompt, max_context_length=512, before_ratio=0.8, 
     prompt_tokens = llm.tokenize(prompt.encode("utf-8"))
     # if len(prompt_tokens)>2:
     #     prompt_tokens = prompt_tokens[1: -1]
+    print(len(tokens) + len(prompt_tokens))
     if len(tokens) + len(prompt_tokens) <= max_context_length:
         print("fits")
         return context  # No need to truncate
@@ -94,7 +95,7 @@ def handle_process_special_format(data):
         prompt = f"\n\nUser request regarding the text:\n{user_text}{turn_assistant}"
 
         # Truncate the context
-        truncated_context = truncate_context(shared_content['markdown'], f"=\\{user_text}\\", max_context_length=2048)
+        truncated_context = truncate_context(shared_content['markdown'], f"=\\{user_text}\\", max_context_length=1024)
         full_prompt = f"{prompt_base}\n...{truncated_context}...{prompt}"
         print(full_prompt)
         placeholder = "=> "

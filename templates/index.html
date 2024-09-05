@@ -506,7 +506,7 @@ document.getElementById('upload-md').addEventListener('change', function(event) 
 
         // Convert markdown to HTML and render LaTeX
 function renderMarkdown(text) {
-
+    text = text.replace(/=>\s*[a-f0-9\-]+\n/g, '=>');
     const previewContainer = document.getElementById('preview-container');
 
 
@@ -795,14 +795,15 @@ function applyPatch(patch) {
         });
 
         // Function to check for the special line format and send it to the backend for processing
+        // Function to check for the special multi-line format and send it to the backend for processing
         function checkSpecialFormat(text) {
-            // Regular expression to match lines in the format `=\<line>\=`
-            const specialLineRegex = /^=\\(.*?)\\=$/gm;
+            // Regular expression to match multi-line prompts in the format `=\<multiline prompt>\=`
+            const specialLineRegex = /^=\\([\s\S]*?)\\=$/gm;
             let matches = [];
             let match;
 
             while ((match = specialLineRegex.exec(text)) !== null) {
-                matches.push(match[1]); // Store the content without the equals signs
+                matches.push(match[1]); // Store the content without the equals signs and trim any excess whitespace
             }
 
             // If we found matches, send them to the backend for processing
@@ -810,6 +811,7 @@ function applyPatch(patch) {
                 socket.emit('process_special_format', { matches, clientId });
             }
         }
+
         function adjustEditorScroll(editor) {
             const editorRect = editor.getBoundingClientRect();
             const lineHeight = editor.scrollHeight / editor.value.split('\n').length;

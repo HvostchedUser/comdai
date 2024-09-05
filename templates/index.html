@@ -796,7 +796,7 @@ function applyPatch(patch) {
 
         // Function to check for the special line format and send it to the backend for processing
         function checkSpecialFormat(text) {
-            // Regular expression to match lines in the format `=<line>=`
+            // Regular expression to match lines in the format `=\<line>\=`
             const specialLineRegex = /^=\\(.*?)\\=$/gm;
             let matches = [];
             let match;
@@ -856,12 +856,13 @@ function applyPatch(patch) {
                 const patches = dmp.patch_make(lastContent, diffs);
                 const patchText = dmp.patch_toText(patches);
 
-                // Check and process any special format before sending
-                checkSpecialFormat(currentValue);
 
                 socket.emit('markdown_patch', { patchText, clientId });
                 lastContent = currentValue;
                 renderMarkdown(currentValue);
+
+                // Check and process any special format
+                checkSpecialFormat(currentValue);
             }
         }, 300);  // Adjust the debounce delay as needed (in milliseconds)
 

@@ -99,7 +99,7 @@ def handle_process_special_format(data):
         full_prompt = f"{prompt_base}\n...{truncated_context}...{prompt}"
         print(full_prompt)
         placeholder = "=> "
-        updated_markdown = current_markdown.replace(f'=\\{line}\\', placeholder, 1)
+        updated_markdown = current_markdown.replace(f'=\\{line}\\=', placeholder, 1)
         diffs = dmp.diff_main(current_markdown, updated_markdown)
         if diffs:
             dmp.diff_cleanupSemantic(diffs)
@@ -150,7 +150,7 @@ def handle_process_special_format(data):
                 break
 
         current_markdown = shared_content['markdown']
-        updated_markdown = current_markdown.replace(placeholder + full_str + token_str + "<=|=", full_str, 1)
+        updated_markdown = current_markdown.replace(placeholder + full_str + token_str + "<=|", full_str, 1)
         diffs = dmp.diff_main(current_markdown, updated_markdown)
         if diffs:
             dmp.diff_cleanupSemantic(diffs)

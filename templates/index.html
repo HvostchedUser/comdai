@@ -506,6 +506,14 @@ document.getElementById('upload-md').addEventListener('change', function(event) 
 
         // Convert markdown to HTML and render LaTeX
 function renderMarkdown(text) {
+
+    const previewContainer = document.getElementById('preview-container');
+
+
+    const previousScrollTop = previewContainer.scrollTop;
+    const previousHeight = previewContainer.scrollHeight;
+
+
     const placeholders = [];
 
     // Helper function to store and replace code/math content with a placeholder
@@ -669,6 +677,16 @@ function renderMarkdown(text) {
     if (window.MathJax) {
         MathJax.typesetPromise();
     }
+
+    // After rendering, measure the new height of the preview container
+    const newHeight = previewContainer.scrollHeight;
+
+    // If the height has changed, adjust the scroll position accordingly
+    const heightDifference = newHeight - previousHeight;
+
+    // Restore the scroll position, adjusting it by the height difference
+    previewContainer.scrollTop = previousScrollTop + heightDifference;
+
 }
 
 
@@ -834,6 +852,7 @@ function applyPatch(patch) {
                     socket.emit('markdown_patch', { patchText, clientId });
                     lastContent = currentValue;
                     renderMarkdown(currentValue);
+
                 }
             } else {
                 isLocalChange = false;

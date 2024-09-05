@@ -28,21 +28,21 @@ turn_assistant = "<end_of_turn>\n<start_of_turn>model\n"
 prompt_base = f"{turn_system}You help to write conspect. You can use tables, blockquotes, lists, formulas (in the following format: $<math>$), code, and other formatting. Be concise, answer as shortly as possible, use formatting where possible. Answer without referencing user, just proceed to request"
 
 
-def truncate_context(context, prompt, max_context_length=256, before_ratio=0.8, after_ratio=0.2):
+def truncate_context(context, prompt, max_context_length=512, before_ratio=0.8, after_ratio=0.2):
     tokens = llm.tokenize(context.encode("utf-8"))
-    # print(len(tokens))
     prompt_tokens = llm.tokenize(prompt.encode("utf-8"))
     # if len(prompt_tokens)>2:
     #     prompt_tokens = prompt_tokens[1: -1]
     if len(tokens) + len(prompt_tokens) <= max_context_length:
+        print("fits")
         return context  # No need to truncate
 
-    # print("NEED TO TRUNCATE")
+    print("NEED TO TRUNCATE")
     prompt_index = context.find(prompt)
-    # print(context, prompt)
-    # print(prompt_index)
+    print(context, prompt)
+    print(prompt_index)
     if prompt_index == -1:
-        # print("CANNOT FIND PROMPT")
+        print("CANNOT FIND PROMPT")
         return context  # Prompt not found, returning full context
 
     # Determine truncation range

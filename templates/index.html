@@ -835,25 +835,39 @@ function applyPatch(patch) {
             }
         }
 
+        function debounce(func, wait) {
+            let timeout;
+            return function (...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
 
-        // Detect changes in the editor and send a patch to the server
+        // Use the debounce function to delay input handling
+        const debouncedInputHandler = debounce(function() {
+            const currentValue = editor.value;
+            const diffs = dmp.diff_main(lastContent, currentValue);
+            if (diffs.length > 0) {
+                dmp.diff_cleanupSemantic(diffs);
+                const patches = dmp.patch_make(lastContent, diffs);
+                const patchText = dmp.patch_toText(patches);
+
+                // Check and process any special format before sending
+                checkSpecialFormat(currentValue);
+
+                socket.emit('markdown_patch', { patchText, clientId });
+                lastContent = currentValue;
+                renderMarkdown(currentValue);
+            }
+        }, 300);  // Adjust the debounce delay as needed (in milliseconds)
+
         editor.addEventListener("input", function() {
             if (!isLocalChange) {
-                const currentValue = editor.value;
-                const diffs = dmp.diff_main(lastContent, currentValue);
-                if (diffs.length > 0) {
-                    dmp.diff_cleanupSemantic(diffs);
-                    const patches = dmp.patch_make(lastContent, diffs);
-                    const patchText = dmp.patch_toText(patches);
-
-                    // Check and process any special format before sending
-                    checkSpecialFormat(currentValue);
-
-                    socket.emit('markdown_patch', { patchText, clientId });
-                    lastContent = currentValue;
-                    renderMarkdown(currentValue);
-
-                }
+                debouncedInputHandler();
             } else {
                 isLocalChange = false;
             }

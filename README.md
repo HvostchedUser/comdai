@@ -1,6 +1,6 @@
 # Comdai: Collaborative Markdown AI-powered Editor
 
-![изображение](https://github.com/user-attachments/assets/9147b521-61f6-4f1a-97c9-9a5d05c29834)
+![Screenshot](https://github.com/user-attachments/assets/ae3eaad9-0a04-4533-bc6d-ebbb0dcf5129)
 
 Your Minimalist Markdown Editor with AI Power 
 

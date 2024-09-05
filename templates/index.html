@@ -792,6 +792,31 @@ function applyPatch(patch) {
                 socket.emit('process_special_format', { matches, clientId });
             }
         }
+        function adjustEditorScroll(editor) {
+            const editorRect = editor.getBoundingClientRect();
+            const lineHeight = editor.scrollHeight / editor.value.split('\n').length;
+
+            // Calculate the number of visible lines
+            const visibleLines = Math.floor(editor.clientHeight / lineHeight);
+
+            // Get the cursor position in the text (index)
+            const cursorPosition = editor.selectionStart;
+
+            // Calculate which line the cursor is on
+            const currentLine = editor.value.substr(0, cursorPosition).split("\n").length;
+
+            // Calculate the current scroll position in terms of lines
+            const scrollLineStart = editor.scrollTop / lineHeight;
+
+            // Determine how many lines are from the current cursor to the bottom of the visible area
+            const linesFromBottom = visibleLines - (currentLine - scrollLineStart);
+
+            // If the cursor is less than 10 lines from the bottom, scroll up
+            if (linesFromBottom < 10) {
+                editor.scrollTop = (currentLine - visibleLines + 10) * lineHeight;
+            }
+        }
+
 
         // Detect changes in the editor and send a patch to the server
         editor.addEventListener("input", function() {
@@ -812,9 +837,8 @@ function applyPatch(patch) {
                 }
             } else {
                 isLocalChange = false;
-
-                //renderMarkdown(currentValue);
             }
+            adjustEditorScroll(editor);
         });
 
         // Initial render

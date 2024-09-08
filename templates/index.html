@@ -845,11 +845,12 @@ function applyPatch(patch) {
                     func(...args);
                 };
                 clearTimeout(timeout);
+                console.log("RESET TIMEOUT")
+
                 timeout = setTimeout(later, wait);
             };
         }
 
-        // Use the debounce function to delay input handling
         const debouncedInputHandler = debounce(function() {
             const currentValue = editor.value;
             const diffs = dmp.diff_main(lastContent, currentValue);
@@ -858,20 +859,23 @@ function applyPatch(patch) {
                 const patches = dmp.patch_make(lastContent, diffs);
                 const patchText = dmp.patch_toText(patches);
 
-
                 socket.emit('markdown_patch', { patchText, clientId });
+                console.log(patchText)
                 lastContent = currentValue;
                 renderMarkdown(currentValue);
 
-                // Check and process any special format
                 checkSpecialFormat(currentValue);
             }
         }, 300);  // Adjust the debounce delay as needed (in milliseconds)
 
+        // Event listener for user input
         editor.addEventListener("input", function() {
             if (!isLocalChange) {
+                // Only debounce for local user input
+                console.log("DEBOUNCE CALL "+editor.value.length);
                 debouncedInputHandler();
             } else {
+                // Reset isLocalChange after server updates
                 isLocalChange = false;
             }
             adjustEditorScroll(editor);

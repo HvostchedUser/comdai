@@ -33,7 +33,7 @@ lock = threading.Lock()
 turn_system = "<start_of_turn>user\n"
 turn_user = "<end_of_turn>\n<start_of_turn>user\n"
 turn_assistant = "<end_of_turn>\n<start_of_turn>model\n"
-prompt_base = f"{turn_system}You help to write conspect. You can use tables, blockquotes, lists, formulas (in the following format: $<math>$), code, and other formatting. Be concise, answer as shortly as possible, use formatting where possible. Answer without referencing user, just proceed to request"
+prompt_base = f"{turn_system}You help to write conspect. You can use tables, blockquotes, lists, formulas (in the following format: $<math>$), code, and other formatting. Be concise, answer as shortly as possible, use formatting where possible. When answering, proceed to request, avoid writing anything before and after answer."
 
 
 def truncate_context(context, prompt, max_context_length=512, before_ratio=0.8, after_ratio=0.2):
@@ -74,47 +74,49 @@ def process_llm_task(unique_id, user_text):
         updated_markdown = shared_content['markdown'].replace(f'=\\{user_text}\\=', placeholder, 1)
         shared_content['markdown'] = updated_markdown
 
-    # Send patch update to the clients
-    diffs = dmp.diff_main(current_markdown, updated_markdown)
-    if diffs:
-        dmp.diff_cleanupSemantic(diffs)
-        patches = dmp.patch_make(current_markdown, updated_markdown)
-        patch_text = dmp.patch_toText(patches)
-        socketio.emit('patch_update', {'patchText': patch_text, 'senderId': 'llm'}, to=None)
-
-    # Generate text using the language model
-    full_str = ""
-    for output in llm(full_prompt, max_tokens=2048, stop=["<|end|>", "<end_of_turn>"], stream=True):
-        token_str = output["choices"][0]["text"]
-        print(token_str, end="", flush=True)
-        with (lock):
-
-            current_markdown = shared_content['markdown']
-
-            if len(full_str)<=0:
-                if (placeholder + full_str not in current_markdown):
-                    print("BREAK!")
-                    return
-                updated_markdown = current_markdown.replace(placeholder + full_str,
-                                                        placeholder + full_str + token_str + "<=|", 1)
-            else:
-                if (placeholder + full_str + "<=|" not in current_markdown):
-                    print("BREAK!")
-                    return
-                updated_markdown = current_markdown.replace(placeholder + full_str + "<=|",
-                                                        placeholder + full_str + token_str + "<=|", 1)
-
-            print(current_markdown, updated_markdown)
-            shared_content['markdown'] = updated_markdown
-        # Send real-time updates to clients
-        full_str += token_str
-        print(full_str)
+        # Send patch update to the clients
         diffs = dmp.diff_main(current_markdown, updated_markdown)
         if diffs:
             dmp.diff_cleanupSemantic(diffs)
             patches = dmp.patch_make(current_markdown, updated_markdown)
             patch_text = dmp.patch_toText(patches)
             socketio.emit('patch_update', {'patchText': patch_text, 'senderId': 'llm'}, to=None)
+            socketio.sleep(0)
+
+    # Generate text using the language model
+    full_str = ""
+    for output in llm(full_prompt, max_tokens=2048, stop=["<|end|>", "<end_of_turn>"], stream=True):
+        token_str = output["choices"][0]["text"]
+        # print(token_str, end="", flush=True)
+        with (lock):
+
+            current_markdown = shared_content['markdown']
+
+            if len(full_str)<=0:
+                if (placeholder + full_str not in current_markdown):
+                    # print("BREAK!")
+                    return
+                updated_markdown = current_markdown.replace(placeholder + full_str,
+                                                        placeholder + full_str + token_str + "<=|", 1)
+            else:
+                if (placeholder + full_str + "<=|" not in current_markdown):
+                    # print("BREAK!")
+                    return
+                updated_markdown = current_markdown.replace(placeholder + full_str + "<=|",
+                                                        placeholder + full_str + token_str + "<=|", 1)
+
+            # print(current_markdown, updated_markdown)
+            shared_content['markdown'] = updated_markdown
+        # Send real-time updates to clients
+        full_str += token_str
+        # print(full_str)
+        diffs = dmp.diff_main(current_markdown, updated_markdown)
+        if diffs:
+            dmp.diff_cleanupSemantic(diffs)
+            patches = dmp.patch_make(current_markdown, updated_markdown)
+            patch_text = dmp.patch_toText(patches)
+            socketio.emit('patch_update', {'patchText': patch_text, 'senderId': 'llm'}, to=None)
+            socketio.sleep(0)
 
 
     # Replace the placeholder once generation is complete
@@ -128,6 +130,7 @@ def process_llm_task(unique_id, user_text):
             patches = dmp.patch_make(current_markdown, updated_markdown)
             patch_text = dmp.patch_toText(patches)
             socketio.emit('patch_update', {'patchText': patch_text, 'senderId': 'llm'}, to=None)
+            socketio.sleep(0)
 
         shared_content['markdown'] = updated_markdown
 
@@ -156,10 +159,12 @@ def handle_connect():
         diffs = dmp.diff_main("", shared_content['markdown'])
     patches = dmp.patch_make("", diffs)
     emit('patch_update', {'patchText': dmp.patch_toText(patches), 'senderId': None})
+    socketio.sleep(0)
 
 
 @socketio.on('markdown_patch')
 def handle_markdown_patch(data):
+    print(data)
     patch_text = data['patchText']
     sender_id = data['clientId']
 
@@ -169,6 +174,7 @@ def handle_markdown_patch(data):
         shared_content['markdown'] = new_markdown
 
     emit('patch_update', {'patchText': patch_text, 'senderId': sender_id}, broadcast=True)
+    socketio.sleep(0)
 
 
 @socketio.on('process_special_format')

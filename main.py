@@ -6,7 +6,11 @@ import re
 import threading
 import queue
 import uuid
+#TODO: Currently, when the text is written by multiple clients, the draw and update function is
+# probably called concurrently. This causes problems with both retrieving the text for creating a patch
+# and receiving inputs!!!
 
+# Currently, the events cannot be processed concurrently
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode='threading')

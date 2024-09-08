@@ -494,6 +494,7 @@ document.getElementById('upload-md').addEventListener('change', function(event) 
 
         const socket = io.connect('http://' + document.domain + ':' + location.port);
         const editor = document.getElementById('editor');
+        const root = document.getElementById('root');
         editor.value = ""
         const preview = document.getElementById('preview');
 
@@ -869,7 +870,7 @@ function applyPatch(patch) {
         }, 300);  // Adjust the debounce delay as needed (in milliseconds)
 
         // Event listener for user input
-        editor.addEventListener("input", function() {
+        root.addEventListener("input", function() {
             if (!isLocalChange) {
                 // Only debounce for local user input
                 console.log("DEBOUNCE CALL "+editor.value.length);

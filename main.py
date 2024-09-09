@@ -9,7 +9,7 @@ import uuid
 #TODO: Currently, when the text is written by multiple clients, the draw and update function is
 # probably called concurrently. This causes problems with both retrieving the text for creating a patch
 # and receiving inputs!!!
-
+# NO! The problem is probably in variable isLocalChange
 # Currently, the events cannot be processed concurrently
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'

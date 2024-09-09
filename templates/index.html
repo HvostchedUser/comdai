@@ -494,7 +494,6 @@ ul li, ol li {
 
     const socket = io.connect('http://' + document.domain + ':' + location.port);
     const editor = document.getElementById('editor');
-    const root = document.getElementById('root');
     editor.value = ""
     const preview = document.getElementById('preview');
 
@@ -868,7 +867,7 @@ ul li, ol li {
     }, 300);  // Adjust the debounce delay as needed (in milliseconds)
 
     // Event listener for user input
-    root.addEventListener("input", function() {
+    editor.addEventListener("input", function() {
         if (!isLocalChange) {
             // Only debounce for local user input
             console.log("DEBOUNCE CALL "+editor.value.length);

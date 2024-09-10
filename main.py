@@ -6,11 +6,7 @@ import re
 import threading
 import queue
 import uuid
-#TODO: Currently, when the text is written by multiple clients, the draw and update function is
-# probably called concurrently. This causes problems with both retrieving the text for creating a patch
-# and receiving inputs!!!
-# NO! The problem is probably in variable isLocalChange
-# Currently, the events cannot be processed concurrently
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode='threading')
@@ -66,7 +62,6 @@ def process_llm_task(unique_id, user_text):
     with lock:
         current_markdown = shared_content['markdown']
     prompt = f"\n\nUser request regarding the text:\n{user_text}{turn_assistant}"
-
     # Truncate context
     truncated_context = truncate_context(current_markdown, f"=\\{user_text}\\", max_context_length=1024)
     full_prompt = f"{prompt_base}\n...{truncated_context}...{prompt}"
@@ -98,13 +93,13 @@ def process_llm_task(unique_id, user_text):
 
             if len(full_str)<=0:
                 if (placeholder + full_str not in current_markdown):
-                    # print("BREAK!")
+                    print("BREAK!")
                     return
                 updated_markdown = current_markdown.replace(placeholder + full_str,
                                                         placeholder + full_str + token_str + "<=|", 1)
             else:
                 if (placeholder + full_str + "<=|" not in current_markdown):
-                    # print("BREAK!")
+                    print("BREAK!")
                     return
                 updated_markdown = current_markdown.replace(placeholder + full_str + "<=|",
                                                         placeholder + full_str + token_str + "<=|", 1)

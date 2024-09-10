@@ -499,10 +499,108 @@ ul li, ol li {
 
     const clientId = Math.random().toString(36).substr(2, 9); // Unique client ID
     let lastContent = editor.value; // Initial content
-    let isLocalChange = false;
+    let patchQueue = [];  // Unified queue for both local and remote patches
+    let isProcessingQueue = false;  // Flag to check if the worker is processing the queue
+    let accumulatedPatches = [];  // To accumulate patches for preview update
+    let previewRenderTimeout;  // Debounce timer for preview updates
+    const maxPatchesBeforeRender = 5;  // Threshold for rendering when patches exceed this number
+
 
     // Initialize diff-match-patch
     const dmp = new diff_match_patch();
+
+    function addPatchToQueue(patch) {
+        patchQueue.push(patch);
+
+        // Start processing the queue if it's not already running
+        if (!isProcessingQueue) {
+            processPatchQueue();
+        }
+    }
+
+    function triggerPreviewUpdate() {
+        // If more than the threshold of patches has accumulated, render immediately
+        if (accumulatedPatches.length >= maxPatchesBeforeRender) {
+            renderAccumulatedPatches();
+            return;
+        }
+
+        // Debounce the rendering, render if nothing happens for 300ms
+        clearTimeout(previewRenderTimeout);
+        previewRenderTimeout = setTimeout(renderAccumulatedPatches, 300);
+    }
+
+    function renderAccumulatedPatches() {
+        if (accumulatedPatches.length === 0) return;
+
+        let finalContent = lastContent;
+        let combinedOldContent = lastContent;
+
+        // Combine the content from all accumulated patches
+        accumulatedPatches.forEach(patch => {
+            finalContent = patch.newContent;
+            combinedOldContent = patch.oldContent;
+        });
+
+        // Highlight changes across all accumulated patches
+        const highlightedMarkdown = highlightChanges(finalContent, combinedOldContent);
+        renderMarkdown(highlightedMarkdown);
+
+        // Clear accumulated patches after rendering
+        accumulatedPatches = [];
+    }
+
+
+    // Process the patch queue sequentially
+    function processPatchQueue() {
+        if (patchQueue.length === 0) {
+            isProcessingQueue = false;
+            return;
+        }
+
+        isProcessingQueue = true;
+
+        const patch = patchQueue.shift();  // Get the next patch from the queue
+
+        if (patch.isLocal) {
+            // Handle local patch
+            const diffs = dmp.diff_main(lastContent, patch.content);
+            if (diffs.length > 0) {
+                dmp.diff_cleanupSemantic(diffs);
+                const patches = dmp.patch_make(lastContent, diffs);
+                const patchText = dmp.patch_toText(patches);
+
+                // Send the patch to the server
+                socket.emit('markdown_patch', { patchText, clientId });
+
+                // Check for special format and handle it
+                checkSpecialFormat(patch.content);
+
+                // Accumulate the patch for rendering
+                accumulatedPatches.push({ newContent: patch.content, oldContent: lastContent });
+
+                // Update lastContent after applying the local patch
+                lastContent = patch.content;
+            }
+        } else {
+            // Handle external (remote) patch
+            const appliedPatch = dmp.patch_apply(patch.patch, lastContent);
+            const newContent = appliedPatch[0];
+
+            // Accumulate the patch for rendering
+            accumulatedPatches.push({ newContent, oldContent: lastContent });
+
+            lastContent = newContent;  // Update lastContent after applying the remote patch
+            editor.value = newContent;  // Update the editor with the patched content
+        }
+
+        // Trigger the preview update if conditions are met
+        triggerPreviewUpdate();
+
+        // Continue processing the queue
+        setTimeout(processPatchQueue, 0);  // Ensure asynchronous processing
+    }
+
 
         // Convert markdown to HTML and render LaTeX
     function renderMarkdown(text) {
@@ -766,29 +864,14 @@ ul li, ol li {
         }, 5000); // Delay in milliseconds
     }
 
-    // Modified applyPatch function
-    function applyPatch(patch) {
-        const selection = saveSelection();
-        const [newText, results] = dmp.patch_apply(patch, editor.value);
-        const adjustedSelection = adjustSelection(selection, patch);
 
-        isLocalChange = true;
-        editor.value = newText;
-
-        // Highlight changes in the preview
-        const highlightedMarkdown = highlightChanges(newText, lastContent);
-        renderMarkdown(highlightedMarkdown);
-
-        lastContent = newText;
-        restoreSelection(adjustedSelection);
-    }
 
 
     // Handle patch updates from the server
-    socket.on('patch_update', function ({ patchText, senderId }) {
+    socket.on('patch_update', function({ patchText, senderId }) {
         if (senderId !== clientId) {
             const patch = dmp.patch_fromText(patchText);
-            applyPatch(patch);
+            addPatchToQueue({ isLocal: false, patch });  // Add remote patch to the queue
         }
     });
 
@@ -849,34 +932,13 @@ ul li, ol li {
         };
     }
 
-    const debouncedInputHandler = debounce(function() {
-        const currentValue = editor.value;
-        const diffs = dmp.diff_main(lastContent, currentValue);
-        if (diffs.length > 0) {
-            dmp.diff_cleanupSemantic(diffs);
-            const patches = dmp.patch_make(lastContent, diffs);
-            const patchText = dmp.patch_toText(patches);
+    const debouncedLocalChangeHandler = debounce(function() {
+        addPatchToQueue({ isLocal: true, content: editor.value });  // Add local change to the queue
+    }, 300);  // Adjust debounce delay as needed
 
-            socket.emit('markdown_patch', { patchText, clientId });
-            console.log(patchText)
-            lastContent = currentValue;
-            renderMarkdown(currentValue);
-
-            checkSpecialFormat(currentValue);
-        }
-    }, 300);  // Adjust the debounce delay as needed (in milliseconds)
-
-    // Event listener for user input
+    // Input listener for local changes
     editor.addEventListener("input", function() {
-        if (!isLocalChange) {
-            // Only debounce for local user input
-            console.log("DEBOUNCE CALL "+editor.value.length);
-            debouncedInputHandler();
-        } else {
-            // Reset isLocalChange after server updates
-            isLocalChange = false;
-        }
-        adjustEditorScroll(editor);
+        addPatchToQueue({ isLocal: true, content: editor.value });  // Add local change to the queue immediately
     });
 
     // Initial render

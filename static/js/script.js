@@ -117,15 +117,27 @@ function triggerPreviewUpdate() {
 function renderAccumulatedPatches() {
     if (accumulatedPatches.length === 0) return;
 
-    let finalContent = lastContent;
+    // Save the current cursor/selection state
+    const selection = saveSelection();
 
-    // Iterate through accumulated patches and apply changes without highlights
+    let finalContent = lastContent;
+    let combinedPatch = [];
+
+    // Iterate through accumulated patches and apply changes
     accumulatedPatches.forEach(patch => {
         finalContent = patch.newContent;
+        combinedPatch.push(...dmp.patch_make(patch.oldContent, patch.newContent)); // Store combined patch
     });
 
-    // Render the final content without any highlights
+    // Render the final content
     renderMarkdown(finalContent);
+
+    // Update the editor with the new content without losing the cursor/selection state
+    editor.value = finalContent;
+
+    // Adjust the cursor/selection state based on the combined patch
+    const adjustedSelection = adjustSelection(selection, combinedPatch);
+    restoreSelection(adjustedSelection);
 
     // Clear accumulated patches after rendering
     accumulatedPatches = [];
@@ -175,6 +187,7 @@ function processPatchQueue() {
         editor.value = newContent;  // Update the editor with the patched content
     }
 
+    restoreSelection(selection);
     // Trigger the preview update if conditions are met
     triggerPreviewUpdate();
 

@@ -136,6 +136,9 @@ function processPatchQueue() {
             checkSpecialFormat(patch.content);
 
             lastContent = patch.content;
+
+            renderMarkdown(lastContent);
+
         }
     } else {
         // Save current selection
@@ -480,10 +483,37 @@ function adjustEditorScroll(editor) {
     }
 }
 
-// Input listener for local changes
 editor.addEventListener("input", function() {
-    addPatchToQueue({ isLocal: true, content: editor.value });  // Add local change to the queue immediately
+    addPatchToQueue({ isLocal: true, content: editor.value });
+
+    // Check if we need to add a new line and move cursor
+    const cursorPosition = editor.selectionStart;
+    const textBeforeCursor = editor.value.substring(0, cursorPosition);
+
+    // Use regex to check if the text before the cursor ends with =\text\=
+    const pattern = /=\\[\s\S]*?\\=$/;
+    const match = textBeforeCursor.match(pattern);
+    if (match && match.index + match[0].length === cursorPosition) {
+        // The user just finished typing =\text\=
+        // Insert a new line at the cursor position
+        const textAfterCursor = editor.value.substring(cursorPosition);
+        editor.value = textBeforeCursor + '\n\n' + textAfterCursor;
+
+        // Move the cursor to the new line
+        editor.selectionStart = editor.selectionEnd = cursorPosition + 2;
+
+        // Update lastContent and render markdown
+        lastContent = editor.value;
+        renderMarkdown(editor.value);
+
+        // Add the new change to the queue
+        addPatchToQueue({ isLocal: true, content: editor.value });
+    } else {
+        // Render markdown for other inputs
+        renderMarkdown(editor.value);
+    }
 });
+
 
 // Initial render
 renderMarkdown(editor.value);

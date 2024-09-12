@@ -182,7 +182,10 @@ function renderMarkdown(text) {
     }
 
     // Handle block LaTeX (MathJax)
-    text = text.replace(/^\$\$(.*?)\$\$/gms, (_, math) => storePlaceholder(`<div class="math">\\[${math}\\]</div>`));
+    //text = text.replace(/^\$\$(.*?)\$\$/gms, (_, math) => storePlaceholder(`<div class="math">\\[${math}\\]</div>`));
+
+    // Handle block LaTeX (MathJax)
+    text = text.replace(/\$\$(.*?)\$\$/gms, (_, math) => storePlaceholder(`<div class="math">\\[${math}\\]</div>`));
 
     // Handle inline LaTeX (MathJax)
     text = text.replace(/\$(.*?)\$/g, (_, math) => storePlaceholder(`<span class="math">\\(${math}\\)</span>`));
@@ -365,36 +368,39 @@ function adjustSelection(selection, patches) {
     let newStart = selection.start;
     let newEnd = selection.end;
 
-    patches.forEach(p => {
-        let diffIndex = p.start1;
-        p.diffs.forEach(diff => {
-            const [op, data] = diff;
-            const diffLength = data.length;
+    patches.forEach(patch => {
+        let delta = 0;
+        let index = patch.start1;
 
-            if (op === -1) { // Deletion
-                if (newStart > diffIndex) {
-                    newStart -= Math.min(diffLength, newStart - diffIndex);
-                }
-                if (newEnd > diffIndex) {
-                    newEnd -= Math.min(diffLength, newEnd - diffIndex);
-                }
-            } else if (op === 1) { // Insertion
-                if (newStart >= diffIndex) {
-                    newStart += diffLength;
-                }
-                if (newEnd >= diffIndex) {
-                    newEnd += diffLength;
-                }
-            }
+        patch.diffs.forEach(diff => {
+            const [operation, text] = diff;
+            const length = text.length;
 
-            if (op !== 0) {
-                diffIndex += diffLength;
+            if (operation === -1) { // Deletion
+                if (index + delta < newStart) {
+                    newStart -= Math.min(length, newStart - (index + delta));
+                }
+                if (index + delta < newEnd) {
+                    newEnd -= Math.min(length, newEnd - (index + delta));
+                }
+                delta -= length;
+            } else if (operation === 1) { // Insertion
+                if (index + delta <= newStart) {
+                    newStart += length;
+                }
+                if (index + delta <= newEnd) {
+                    newEnd += length;
+                }
+                delta += length;
+            } else { // Equality
+                index += length;
             }
         });
     });
 
     return { start: newStart, end: newEnd };
 }
+
 
 
 // Function to wrap new content with a span that will be animated
@@ -496,18 +502,18 @@ editor.addEventListener("input", function() {
     if (match && match.index + match[0].length === cursorPosition) {
         // The user just finished typing =\text\=
         // Insert a new line at the cursor position
-        const textAfterCursor = editor.value.substring(cursorPosition);
-        editor.value = textBeforeCursor + '\n\n' + textAfterCursor;
-
-        // Move the cursor to the new line
-        editor.selectionStart = editor.selectionEnd = cursorPosition + 2;
-
-        // Update lastContent and render markdown
+//        const textAfterCursor = editor.value.substring(cursorPosition);
+//        editor.value = textBeforeCursor + '\n' + textAfterCursor;
+//
+//        // Move the cursor to the new line
+//        editor.selectionStart = editor.selectionEnd = cursorPosition + 1;
+//
+//        // Update lastContent and render markdown
         lastContent = editor.value;
         renderMarkdown(editor.value);
-
-        // Add the new change to the queue
-        addPatchToQueue({ isLocal: true, content: editor.value });
+//
+//        // Add the new change to the queue
+//        addPatchToQueue({ isLocal: true, content: editor.value });
     } else {
         // Render markdown for other inputs
         renderMarkdown(editor.value);

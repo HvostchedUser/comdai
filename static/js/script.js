@@ -77,16 +77,13 @@ document.getElementById('restore-panels').addEventListener('click', function() {
 
 const socket = io.connect('http://' + document.domain + ':' + location.port);
 const editor = document.getElementById('editor');
-editor.value = ""
+editor.value = "";
 const preview = document.getElementById('preview');
 
 const clientId = Math.random().toString(36).substr(2, 9); // Unique client ID
 let lastContent = editor.value; // Initial content
 let patchQueue = [];  // Unified queue for both local and remote patches
 let isProcessingQueue = false;  // Flag to check if the worker is processing the queue
-let accumulatedPatches = [];  // To accumulate patches for preview update
-let previewRenderTimeout;  // Debounce timer for preview updates
-const maxPatchesBeforeRender = 5;  // Threshold for rendering when patches exceed this number
 
 
 
@@ -95,104 +92,70 @@ const dmp = new diff_match_patch();
 
 function addPatchToQueue(patch) {
     patchQueue.push(patch);
-
-    // Start processing the queue if it's not already running
-    if (!isProcessingQueue) {
-        processPatchQueue();
-    }
-}
-
-function triggerPreviewUpdate() {
-    // If more than the threshold of patches has accumulated, render immediately
-    if (accumulatedPatches.length >= maxPatchesBeforeRender) {
-        renderAccumulatedPatches();
-        return;
-    }
-
-    // Debounce the rendering, render if nothing happens for 300ms
-    clearTimeout(previewRenderTimeout);
-    previewRenderTimeout = setTimeout(renderAccumulatedPatches, 500);
+    processPatchQueue();  // Process the patch immediately
 }
 
 function renderAccumulatedPatches() {
-    if (accumulatedPatches.length === 0) return;
+    if (patchQueue.length === 0) return;
 
-    // Save the current cursor/selection state
     const selection = saveSelection();
 
     let finalContent = lastContent;
     let combinedPatch = [];
 
-    // Iterate through accumulated patches and apply changes
-    accumulatedPatches.forEach(patch => {
+    patchQueue.forEach(patch => {
         finalContent = patch.newContent;
-        combinedPatch.push(...dmp.patch_make(patch.oldContent, patch.newContent)); // Store combined patch
+        combinedPatch.push(...dmp.patch_make(patch.oldContent, patch.newContent));
     });
 
-    // Render the final content
     renderMarkdown(finalContent);
-
-    // Update the editor with the new content without losing the cursor/selection state
     editor.value = finalContent;
 
-    // Adjust the cursor/selection state based on the combined patch
     const adjustedSelection = adjustSelection(selection, combinedPatch);
     restoreSelection(adjustedSelection);
 
-    // Clear accumulated patches after rendering
-    accumulatedPatches = [];
+    patchQueue = [];
 }
 
 
-// Process the patch queue sequentially
 function processPatchQueue() {
     if (patchQueue.length === 0) {
-        isProcessingQueue = false;
         return;
     }
 
-    isProcessingQueue = true;
-
-    const patch = patchQueue.shift();  // Get the next patch from the queue
+    const patch = patchQueue.shift();  // Get the next patch
 
     if (patch.isLocal) {
-        // Handle local patch
         const diffs = dmp.diff_main(lastContent, patch.content);
         if (diffs.length > 0) {
             dmp.diff_cleanupSemantic(diffs);
             const patches = dmp.patch_make(lastContent, diffs);
             const patchText = dmp.patch_toText(patches);
 
-            // Send the patch to the server
             socket.emit('markdown_patch', { patchText, clientId });
-
-            // Check for special format and handle it
             checkSpecialFormat(patch.content);
 
-            // Accumulate the patch for rendering
-            accumulatedPatches.push({ newContent: patch.content, oldContent: lastContent });
-
-            // Update lastContent after applying the local patch
             lastContent = patch.content;
         }
     } else {
-        // Handle external (remote) patch
+        // Save current selection
+        const selection = saveSelection();
+
+        // Apply the patch
         const appliedPatch = dmp.patch_apply(patch.patch, lastContent);
         const newContent = appliedPatch[0];
 
-        // Accumulate the patch for rendering
-        accumulatedPatches.push({ newContent, oldContent: lastContent });
+        // Adjust the selection based on the patch
+        const adjustedSelection = adjustSelection(selection, patch.patch);
 
-        lastContent = newContent;  // Update lastContent after applying the remote patch
-        editor.value = newContent;  // Update the editor with the patched content
+        lastContent = newContent;
+        editor.value = newContent;
+
+        // Restore the adjusted selection
+        restoreSelection(adjustedSelection);
+
+        renderMarkdown(newContent);
     }
-
-    restoreSelection(selection);
-    // Trigger the preview update if conditions are met
-    triggerPreviewUpdate();
-
-    // Continue processing the queue
-    setTimeout(processPatchQueue, 0);  // Ensure asynchronous processing
 }
 
 
@@ -395,37 +358,41 @@ function restoreSelection(selection) {
     editor.focus();
 }
 
-// Adjust selection based on diffs
-function adjustSelection(selection, patch) {
+function adjustSelection(selection, patches) {
     let newStart = selection.start;
     let newEnd = selection.end;
 
-    patch.forEach(p => {
-        const diffStart = p.start1;
-
+    patches.forEach(p => {
+        let diffIndex = p.start1;
         p.diffs.forEach(diff => {
-            const diffText = diff[1].length;
+            const [op, data] = diff;
+            const diffLength = data.length;
 
-            if (diff[0] === -1) { // Deletion
-                if (selection.start > diffStart) {
-                    newStart -= Math.min(diffText, selection.start - diffStart);
+            if (op === -1) { // Deletion
+                if (newStart > diffIndex) {
+                    newStart -= Math.min(diffLength, newStart - diffIndex);
                 }
-                if (selection.end > diffStart) {
-                    newEnd -= Math.min(diffText, selection.end - diffStart);
+                if (newEnd > diffIndex) {
+                    newEnd -= Math.min(diffLength, newEnd - diffIndex);
                 }
-            } else if (diff[0] === 1) { // Insertion
-                if (selection.start >= diffStart) {
-                    newStart += diffText;
+            } else if (op === 1) { // Insertion
+                if (newStart >= diffIndex) {
+                    newStart += diffLength;
                 }
-                if (selection.end >= diffStart) {
-                    newEnd += diffText;
+                if (newEnd >= diffIndex) {
+                    newEnd += diffLength;
                 }
+            }
+
+            if (op !== 0) {
+                diffIndex += diffLength;
             }
         });
     });
 
     return { start: newStart, end: newEnd };
 }
+
 
 // Function to wrap new content with a span that will be animated
 function highlightChanges(newText, oldText) {
@@ -512,24 +479,6 @@ function adjustEditorScroll(editor) {
         editor.scrollTop = (currentLine - visibleLines + 10) * lineHeight;
     }
 }
-
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        console.log("RESET TIMEOUT")
-
-        timeout = setTimeout(later, wait);
-    };
-}
-
-const debouncedLocalChangeHandler = debounce(function() {
-    addPatchToQueue({ isLocal: true, content: editor.value });  // Add local change to the queue
-}, 300);  // Adjust debounce delay as needed
 
 // Input listener for local changes
 editor.addEventListener("input", function() {

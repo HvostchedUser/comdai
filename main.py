@@ -70,7 +70,7 @@ def process_llm_task(unique_id, user_text):
     placeholder = f"=> {unique_id}\n"
 
     with lock:
-        updated_markdown = shared_content['markdown'].replace(f'=\\{user_text}\\=', placeholder, 1)
+        updated_markdown = shared_content['markdown'].replace(f'=\\{user_text}\\=', placeholder+'\n\n', 1)
         shared_content['markdown'] = updated_markdown
 
         # Send patch update to the clients
